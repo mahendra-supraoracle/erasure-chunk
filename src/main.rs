@@ -1,186 +1,105 @@
-use std::io;
-use rand::Rng;
+use std::env::{args, Args};
 use reed_solomon_erasure::galois_8::ReedSolomon;
 
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
 
-use std::str;
+// use std::str;
+// use std::str::from_utf8;
 
 extern crate time;
 
-#[macro_use(shards)]
+//#[macro_use(shards)]
 extern crate reed_solomon_erasure;
-
-// TEST CODE
-// or use the following for Galois 2^16 backend
-// use reed_solomon_erasure::galois_16::ReedSolomon;
-
-// fn main() {
-    
-//     println!("Hello, world!");
-
-//     // let secret_number = rand::thread_rng().gen_range(1..101);
-
-//     // println!("your secret number : {}", secret_number);
-
-//     // println!("Enter some input..");
-
-//     // let mut guess = String::new();
-
-//     // io::stdin()
-//     // .read_line(&mut guess)
-//     // .expect("error while reading input");
-
-//     // //
-//     // //
-//     // println!("You guess : {}", guess);
-
-//     //
-//     let r = ReedSolomon::new(13, 5).unwrap(); // 3 data shards, 2 parity shards
-
-//     // let mut master_copy = shards!(
-//     //     [0, 1,  2,  3],
-//     //     [8, 9, 10, 11],
-//     //     [8, 9, 10, 11],
-//     //     [4, 5,  6,  7],
-//     //     [8, 9, 10, 11],
-//     //     [8, 9, 10, 11],
-//     //     [8, 9, 10, 11],
-//     //     [8, 9, 10, 11],
-//     //     [8, 9, 10, 11],
-//     //     [8, 9, 10, 11],
-//     //     [8, 9, 10, 11],
-//     //     [8, 9, 10, 11],
-//     //     [8, 9, 10, 11],
-//     //     [0, 0,  0,  0], // last 2 rows are parity shards
-//     //     [0, 0,  0,  0],
-//     //     [0, 0,  0,  0],
-//     //     [0, 0,  0,  0],
-//     //     [0, 0,  0,  0]
-//     // );
-
-//     let mut master_copy = shards!(
-//         {
-//             "name":"mahendra"
-//         }
-//     );
-
-//     // Construct the parity shards
-//     r.encode(&mut master_copy).unwrap();
-
-//     // Make a copy and transform it into option shards arrangement
-//     // for feeding into reconstruct_shards
-//     let mut shards: Vec<_> = master_copy.iter().cloned().map(Some).collect();
-
-//     // We can remove up to 2 shards, which may be data or parity shards
-//     //shards[0] = None;
-//     //shards[1] = None;
-//     shards[2] = None;
-//      shards[3] = None;
-//     // shards[4] = None;
-//     // shards[5] = None;
-//     // shards[6] = None;
-//     // shards[7] = None;
-//     // shards[8] = None;
-//      shards[9] = None;
-//      shards[10] = None;
-//      shards[11] = None;
-//     // shards[12] = None;
-//     // shards[13] = None;
-//     // shards[14] = None;
-//     // shards[15] = None;
-//     //shards[16] = None;
-//     //shards[17] = None;
-    
-//     println!("shards lenght : {}", shards.len());
-
-//     // Try to reconstruct missing shards
-//     r.reconstruct(&mut shards).unwrap();
-
-//     // Convert back to normal shard arrangement
-//     let result: Vec<_> = shards.into_iter().filter_map(|x| x).collect();
-
-//     assert!(r.verify(&result).unwrap());
-//     assert_eq!(master_copy, result);
-
-// }
-
 
 macro_rules! make_random_parity_shards {
     ($per_shard:expr, $size:expr) => {{
         let mut shards = Vec::<Vec<u8>>::with_capacity(13);
-        for _ in 0..$size {
-            shards.push(vec![0u8; $per_shard]);
-        }
-
-        for s in shards.iter_mut() {
-            fill_random(s);
-        }
+        shards = vec![vec![0u8; $per_shard]; $size];
         shards
     }}
 }
 
-fn fill_random(arr : &mut [u8]) {
-    for a in arr.iter_mut() {
-        *a = 0;
-    }
-}
 
+//
+//  [N, K]
+//  N   :   erasure code encodes source data into {N} shards, where (N ≥ 1)
+//  K   :   chunk size decided 1/K, where 1 is source data size{MB}, k is parity chunk (1 ≤ K ≤ N)
+//
 fn main() -> std::io::Result<()> {
 
+    // ERASURE CHUNK CONFIGURATION
+    let mut _args: Args = args();
+    println!("Arguments : {:?}", _args);
+    //println!("Hello, world...!");
+    let n = _args.nth(1).unwrap().parse::<usize>().unwrap();
+    let k = _args.nth(0).unwrap().parse::<usize>().unwrap();
+    let file_name = _args.nth(0).unwrap().to_string(); //String.from_utf8()
+
+    println!("ARGUMENT :- N = {:?}  K = {:?} File Name = {:?}", n, k, file_name);
+
+    if n <= k || k <= 0 {
+        panic!("N,K Value must be followed (1 ≤ K ≤ N)");
+    }
+
     // TRANSACTION SOURCE FILE
-    let file = File::open("transactions.json")?;
+    let file = File::open(file_name)?;
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents)?;
 
-    //println!("FILE CONTENT ::: {} ", contents);
-
+    // START TIME
     let start = time::precise_time_ns();
 
-    let src: Vec<u8> = contents.to_owned().as_bytes().to_vec();
-    println!("Batch Size ( Bytes ) :: {:?}", src.len());
+    let mut src: Vec<u8> = contents.to_owned().as_bytes().to_vec();
 
-    let dst: Vec<Vec<u8>> = src.chunks(850210).map(|x| x.to_vec()).collect();       // CURRENT SIZE OF DATA 01_39_000
+    let _mod:usize = src.len() % n;                                        // BATCH SIZE ADJUSTMENT
+    if _mod != 0 {
+        let _mod1:usize = n - _mod;
+        src.extend(std::iter::repeat(0).take(_mod1));
+
+    }
+
+    let per_chunk_size:usize = src.len() / n;
+
+    // CREATE CHUNK
+    let mut master_copy: Vec<Vec<u8>> = src.chunks(per_chunk_size).map(|x| x.to_vec()).collect();       // CURRENT SIZE OF DATA 01_39_000
     
     // CHUNK ARRAY
     // VERIFYING SIZE
-    // println!("DST LEN :: {:?}", dst.len() );
-    // println!("DST INTERNAL DATA LEN  1 :: {:?}", dst[0].len() );
-    // println!("DST INTERNAL DATA LEN  2 :: {:?}", dst[1].len() );
-    // println!("dst : {:?}", dst.len());
+    // println!("DST LEN :: {:?}", master_copy.len() );
+    // println!("DST INTERNAL DATA LEN  1 :: {:?}", master_copy[0].len() );
+    // println!("DST INTERNAL DATA LEN  2 :: {:?}", master_copy[1].len() );
+    // println!("dst : {:?}", master_copy.len());
 
     // REFERENCED
-    let mut master_copy = dst;
+    //let mut master_copy = dst;
 
-    let r = ReedSolomon::new(8, 5).unwrap();                                        // 8 data shards, 5 parity shards
+    let r = ReedSolomon::new(n, k).unwrap();                     // 8 data shards, 5 parity shards
 
-    // DYNAMIC PARITY PARAMS 
-    let mut dyn_shards = make_random_parity_shards!(850210, 5);                     // GENERATE 5 PARITY SHARD WITH 0's
+    // GENERATE DYNAMIC PARITY CHUNK
+    let mut parity_shards = make_random_parity_shards!(per_chunk_size, k);                     // GENERATE 5 PARITY SHARD WITH 0's
+
     //
-    for shard_with_zero_element in dyn_shards.iter_mut() {
-        master_copy.push(shard_with_zero_element.to_vec());
-    }
-
-
-    println!("master_copy: total chunk generated {:?}", master_copy.len());
-    
+    master_copy.append(&mut parity_shards);
     //
-    println!("master_copy: 0 {:?}", master_copy[0].len());
-    println!("master_copy: 1 {:?}", master_copy[1].len());
-    println!("master_copy: 2 {:?}", master_copy[2].len());
-    println!("master_copy: 3 {:?}", master_copy[3].len());
-    println!("master_copy: 4 {:?}", master_copy[4].len());
-    println!("master_copy: 5 {:?}", master_copy[5].len());
-    println!("master_copy: 6 {:?}", master_copy[6].len());
-    println!("master_copy: 7 {:?}", master_copy[7].len());
-    println!("master_copy: 8 {:?}", master_copy[8].len());
-    println!("master_copy: 9 {:?}", master_copy[9].len());
-    println!("master_copy: 10 {:?}", master_copy[10].len());
-    println!("master_copy: 11 {:?}", master_copy[11].len());
-    println!("master_copy: 12 {:?}", master_copy[12].len());
+    //
+    // println!("master_copy: total chunk generated {:?}", master_copy.len());
+    // //
+    // println!("master_copy: 0 {:?}", master_copy[0].len());
+    // println!("master_copy: 1 {:?}", master_copy[1].len());
+    // println!("master_copy: 2 {:?}", master_copy[2].len());
+    // println!("master_copy: 3 {:?}", master_copy[3].len());
+    // println!("master_copy: 4 {:?}", master_copy[4].len());
+    // println!("master_copy: 5 {:?}", master_copy[5].len());
+    // println!("master_copy: 6 {:?}", master_copy[6].len());
+    // println!("master_copy: 7 {:?}", master_copy[7].len());
+    // println!("master_copy: 8 {:?}", master_copy[8].len());
+    // println!("master_copy: 9 {:?}", master_copy[9].len());
+    // println!("master_copy: 10 {:?}", master_copy[10].len());
+    // println!("master_copy: 11 {:?}", master_copy[11].len());
+    // println!("master_copy: 12 {:?}", master_copy[12].len());
     
     // Construct the parity shards
     r.encode(&mut master_copy).unwrap();
@@ -190,28 +109,13 @@ fn main() -> std::io::Result<()> {
     let mut shards: Vec<_> = master_copy.iter().cloned().map(Some).collect();
 
     // We can remove up to few shards, which may be data or parity shards
+    // DESTROYING FEW SHARDS, DATA OR PARITY SHARDS
     shards[1] = None;
     shards[3] = None;
     shards[5] = None;
-    shards[7] = None;
+    //shards[7] = None;
 
-    // let mut abc = vec![];
-    // abc.push(shards[0].clone());
-    // abc.push(shards[1].clone());
-    // abc.push(shards[2].clone());
-    // abc.push(shards[3].clone());
-    // abc.push(shards[4].clone());
-    // abc.push(shards[5].clone());
-    // abc.push(shards[6].clone());
-    // abc.push(shards[7].clone());
-    // abc.push(shards[8].clone());
-    // abc.push(shards[9].clone());
-    // abc.push(shards[10].clone());
-    // abc.push(shards[11].clone());
-    // abc.push(shards[12].clone());
-
-    // println!("shards: {:?}", abc);
-    // Try to reconstruct missing shards
+    // TRY TO RECONSTRUCT SHARDS
     r.reconstruct(&mut shards).unwrap();
 
     // Convert back to normal shard arrangement
@@ -228,10 +132,10 @@ fn main() -> std::io::Result<()> {
 
         // println!("resultttttt : {:?}", resultsss.len());
     // END MERGE
-    
-    let output_src = str::from_utf8(&result[0]).unwrap();    // BYTES TO ORIGINAL DATA
-
-    //println!("O/T : {}", output_src);
+    //
+    // let output_src = str::from_utf8(&result[0]).unwrap();    // BYTES TO ORIGINAL DATA
+    //
+    // //println!("O/T : {}", output_src);
 
     //
     let end   = time::precise_time_ns();
