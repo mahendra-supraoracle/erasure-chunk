@@ -4,6 +4,7 @@ use reed_solomon_erasure::galois_8::ReedSolomon;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
+use std::time::Instant;
 
 // use std::str;
 // use std::str::from_utf8;
@@ -51,6 +52,7 @@ fn main() -> std::io::Result<()> {
 
     // START TIME
     let start = time::precise_time_ns();
+    let start_1 = Instant::now();
 
     let mut src: Vec<u8> = contents.to_owned().as_bytes().to_vec();
 
@@ -107,7 +109,13 @@ fn main() -> std::io::Result<()> {
     // Make a copy and transform it into option shards arrangement
     // for feeding into reconstruct_shards
     let mut shards: Vec<_> = master_copy.iter().cloned().map(Some).collect();
+    
+    // END TIME
+    let batch_chunk_creationg_time = start_1.start.elapsed().as_millis();
+    println!("batch chunk creation time :: {:?}", batch_chunk_creationg_time);
 
+    let re_creation = Intant::now(); 
+    
     // We can remove up to few shards, which may be data or parity shards
     // DESTROYING FEW SHARDS, DATA OR PARITY SHARDS
     shards[1] = None;
@@ -142,7 +150,10 @@ fn main() -> std::io::Result<()> {
     let time_taken = (end - start) as f64 / 1_000_000_000.0;
     
     //
-    println!("    time taken       : {}", time_taken);
+    // println!("    time taken       : {}", time_taken);
+
+    let re_creationg_time = re_creation.start.elapsed().as_millis();
+    println!("batch chunk re- creation time :: {:?}", re_creationg_time);
 
     assert!(r.verify(&result).unwrap());
     //println!("master_copy: {:?}", master_copy);
