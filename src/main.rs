@@ -39,9 +39,9 @@ fn main() -> std::io::Result<()> {
 
     println!("ARGUMENT :- N = {:?}  K = {:?} File Name = {:?}", n, k, file_name);
 
-    if n <= k || k <= 0 {
-        panic!("N,K Value must be followed (1 ≤ K ≤ N)");
-    }
+//     if n <= k || k <= 0 {
+//         panic!("N,K Value must be followed (1 ≤ K ≤ N)");
+//     }
 
     // TRANSACTION SOURCE FILE
     let file = File::open(file_name)?;
