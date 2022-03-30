@@ -114,7 +114,7 @@ fn main() -> std::io::Result<()> {
     let batch_chunk_creationg_time = start_1.start.elapsed().as_millis();
     println!("batch chunk creation time :: {:?}", batch_chunk_creationg_time);
 
-    let re_creation = Intant::now(); 
+    let re_creation = Instant::now(); 
     
     // We can remove up to few shards, which may be data or parity shards
     // DESTROYING FEW SHARDS, DATA OR PARITY SHARDS
