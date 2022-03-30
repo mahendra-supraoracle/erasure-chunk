@@ -111,7 +111,7 @@ fn main() -> std::io::Result<()> {
     let mut shards: Vec<_> = master_copy.iter().cloned().map(Some).collect();
     
     // END TIME
-    let batch_chunk_creationg_time = start_1.start.elapsed().as_millis();
+    let batch_chunk_creationg_time = start_1.elapsed().as_millis();
     println!("batch chunk creation time :: {:?}", batch_chunk_creationg_time);
 
     let re_creation = Instant::now(); 
@@ -152,7 +152,7 @@ fn main() -> std::io::Result<()> {
     //
     // println!("    time taken       : {}", time_taken);
 
-    let re_creationg_time = re_creation.start.elapsed().as_millis();
+    let re_creationg_time = re_creation.elapsed().as_millis();
     println!("batch chunk re- creation time :: {:?}", re_creationg_time);
 
     assert!(r.verify(&result).unwrap());
